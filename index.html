@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#04070d">
+<title>Veil Skiff, a White Veil galaxy game</title>
+<style>
+  :root{
+    --bg:#04070d; --ink:#f4efe4; --gold:#e8c66a; --gold-dim:#8a6f35;
+    --cyan:#00f0ff; --violet:#8b5cf6; --danger:#ff5470;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--bg)}
+  body{font-family:Georgia,'Times New Roman',serif;color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    touch-action:none;user-select:none;-webkit-user-select:none}
+  #wrap{position:relative;width:100%;height:100%;max-width:520px;max-height:100%}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:flex-start;padding:14px 16px;pointer-events:none;z-index:5}
+  .hud .stat{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-dim)}
+  .hud .val{font-size:26px;color:var(--ink);letter-spacing:.04em}
+  #mult{color:var(--cyan)}
+  #hullRow{display:flex;gap:6px;margin-top:6px}
+  .pip{width:22px;height:10px;border-radius:5px;background:#2a2f3a;border:1px solid #3a4150}
+  .pip.on{background:linear-gradient(90deg,var(--gold),#fff3d6);border-color:var(--gold);
+    box-shadow:0 0 8px rgba(232,198,106,.8)}
+  #elder{position:absolute;left:0;right:0;bottom:118px;text-align:center;z-index:5;
+    pointer-events:none;opacity:0;transition:opacity .4s;padding:0 24px}
+  #elder.show{opacity:1}
+  #elder span{display:inline-block;background:rgba(4,7,13,.82);border:1px solid var(--gold-dim);
+    border-radius:12px;padding:10px 16px;font-style:italic;font-size:15px;color:var(--ink);
+    max-width:92%}
+  #elder b{color:var(--gold);font-style:normal}
+  .screen{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:32px 28px;
+    background:radial-gradient(ellipse at 50% 30%,rgba(232,198,106,.10),transparent 60%),
+               rgba(4,7,13,.88)}
+  .screen.hidden{display:none}
+  .kicker{font-size:12px;letter-spacing:.35em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:14px}
+  h1{font-size:44px;letter-spacing:.08em;color:var(--ink);font-weight:normal;margin-bottom:6px;
+    text-shadow:0 0 24px rgba(232,198,106,.35)}
+  h1 .g{color:var(--gold)}
+  .lore{font-style:italic;color:#b9b2a0;font-size:16px;line-height:1.6;max-width:340px;margin:10px 0 26px}
+  .btn{pointer-events:auto;cursor:pointer;border:1px solid var(--gold);color:var(--ink);
+    background:linear-gradient(180deg,rgba(232,198,106,.16),rgba(232,198,106,.05));
+    font-family:inherit;font-size:18px;letter-spacing:.06em;padding:15px 38px;border-radius:14px;
+    min-height:56px;min-width:230px}
+  .btn:active{transform:scale(.97)}
+  .best{margin-top:22px;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-dim)}
+  .best b{color:var(--gold);font-size:20px;display:block;margin-top:6px;letter-spacing:.06em}
+  #sndBtn{position:absolute;top:12px;right:12px;z-index:20;pointer-events:auto;cursor:pointer;
+    width:48px;height:48px;border-radius:12px;border:1px solid #3a4150;background:rgba(4,7,13,.7);
+    color:var(--gold);font-size:20px;display:flex;align-items:center;justify-content:center}
+  .howto{margin-top:18px;font-size:13.5px;color:#8f8875;line-height:1.7;max-width:320px}
+  #finalScore{font-size:52px;color:var(--gold);margin:8px 0 2px;letter-spacing:.04em}
+  .newbest{color:var(--cyan);letter-spacing:.2em;text-transform:uppercase;font-size:13px;
+    margin-top:10px;min-height:18px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div class="hud" id="hud" style="display:none">
+    <div><div class="stat">Score</div><div class="val" id="score">0</div>
+      <div class="stat" style="margin-top:8px">Flow <span id="mult">×1</span></div></div>
+    <div style="text-align:right"><div class="stat">Hull</div><div id="hullRow"></div></div>
+  </div>
+  <div id="elder"><span></span></div>
+  <button id="sndBtn" aria-label="Toggle sound">♪</button>
+
+  <div class="screen" id="menu">
+    <div class="kicker">White Veil Galaxy</div>
+    <h1>VEIL <span class="g">SKIFF</span></h1>
+    <p class="lore">Pip's skiff, grown not built. Ride the white-gold currents. Mind the fractures. The Veil provides.</p>
+    <button class="btn" id="startBtn">Request launch clearance</button>
+    <div class="best">Best voyage<b id="menuBest">0</b></div>
+    <p class="howto">Drag anywhere to steer, or use arrow keys.<br>Gold currents raise your flow. Fractures cost hull.<br>Hull regrows if you fly clean.</p>
+  </div>
+
+  <div class="screen hidden" id="over">
+    <div class="kicker">Voyage ended</div>
+    <h1>RE<span class="g">CLAIMED</span></h1>
+    <p class="lore" id="overLore">Elder: "The Veil reclaims its own. Again?"</p>
+    <div class="best">Score<div id="finalScore">0</div></div>
+    <div class="newbest" id="newBest"></div>
+    <div style="height:18px"></div>
+    <button class="btn" id="againBtn">Request launch clearance</button>
+    <div class="best">Best voyage<b id="overBest">0</b></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* VEIL SKIFF, a White Veil galaxy game. Grown, not built. */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('wrap');
+let W = 0, H = 0, DPR = 1;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- audio ---------- */
+let soundOn = (localStorage.getItem('vs-sound') !== 'off');
+const sndBtn = document.getElementById('sndBtn');
+function paintSnd(){ sndBtn.textContent = soundOn ? '♪' : '✕'; sndBtn.style.opacity = soundOn ? 1 : .45; }
+paintSnd();
+sndBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  soundOn = !soundOn;
+  localStorage.setItem('vs-sound', soundOn ? 'on' : 'off');
+  paintSnd();
+});
+let AC = null;
+function beep(freq, dur, type, vol){
+  if(!soundOn) return;
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || .12, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  }catch(e){}
+}
+const sfx = {
+  mote(){ beep(880 + Math.random()*220, .12, 'sine', .08); },
+  mark(){ beep(660,.1,'triangle',.1); setTimeout(()=>beep(990,.14,'triangle',.1), 90); },
+  hit(){ beep(140,.25,'sawtooth',.14); },
+  regrow(){ beep(330,.2,'sine',.09); setTimeout(()=>beep(495,.25,'sine',.09), 140); },
+  over(){ beep(220,.4,'triangle',.12); setTimeout(()=>beep(147,.6,'triangle',.12), 250); },
+  start(){ beep(523,.12,'triangle',.1); setTimeout(()=>beep(784,.18,'triangle',.1), 110); }
+};
+
+/* ---------- state ---------- */
+const BEST_KEY='vs-best', GAMES_KEY='vs-games';
+let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+let mode = 'menu'; // menu | playing | over
+let score=0, mult=1, hull=3, invuln=0, sinceHit=0, elapsed=0;
+let skiff, currents=[], fractures=[], motes=[], marks=[], parts=[], stars=[];
+let spawnT=0, moteT=0, markT=0;
+let elderTimer=null;
+
+const elderBox = document.getElementById('elder');
+function elder(text, ms){
+  elderBox.querySelector('span').innerHTML = '<b>Elder:</b> ' + text;
+  elderBox.classList.add('show');
+  clearTimeout(elderTimer);
+  elderTimer = setTimeout(()=>elderBox.classList.remove('show'), ms || 2600);
+}
+
+/* ---------- entities ---------- */
+function newSkiff(){
+  return { x:W/2, y:H*0.72, vx:0, vy:0, r:14, tx:W/2, ty:H*0.72, dragging:false };
+}
+function makeStars(){
+  stars = [];
+  for(let i=0;i<90;i++) stars.push({x:Math.random()*W, y:Math.random()*H,
+    s:Math.random()*1.8+.4, tw:Math.random()*Math.PI*2});
+}
+function currentCenter(c, y){ return c.x + Math.sin(y*0.008 + c.phase) * 34; }
+function spawnCurrent(){
+  currents.push({ x: 40 + Math.random()*(W-80), w: 84 + Math.random()*40,
+    phase: Math.random()*Math.PI*2, speed: 60 + Math.random()*40 });
+  if(currents.length > 3) currents.shift();
+}
+function spawnFracture(){
+  const r = 16 + Math.random()*22;
+  const pts = [];
+  const n = 7 + (Math.random()*4|0);
+  for(let i=0;i<n;i++){
+    const a = (i/n)*Math.PI*2, rr = r*(0.55 + Math.random()*0.7);
+    pts.push([Math.cos(a)*rr, Math.sin(a)*rr]);
+  }
+  fractures.push({ x: Math.random()*W, y:-40, r:r, pts:pts,
+    vy: 90 + Math.random()*70 + elapsed*1.6, wob: Math.random()*Math.PI*2,
+    rot: Math.random()*Math.PI*2, vr:(Math.random()-.5)*1.4 });
+}
+function spawnMote(){
+  motes.push({ x: Math.random()*W, y:-12, vy: 110 + Math.random()*60, r:4.5,
+    ph: Math.random()*Math.PI*2 });
+}
+function spawnMark(){
+  const glyphs = ['✦','❂','☽','✧','◈'];
+  marks.push({ x: Math.random()*W, y:-16, vy: 95 + Math.random()*40,
+    g: glyphs[Math.random()*glyphs.length|0], ph: Math.random()*Math.PI*2 });
+}
+function burst(x, y, color, n){
+  for(let i=0;i<(n||10);i++){
+    const a = Math.random()*Math.PI*2, sp = 60 + Math.random()*160;
+    parts.push({x:x, y:y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      life:.5+Math.random()*.4, t:0, c:color, s:1+Math.random()*2.5});
+  }
+}
+
+/* ---------- input ---------- */
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+function ptr(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+canvas.addEventListener('pointerdown', e => {
+  if(mode !== 'playing') return;
+  const p = ptr(e);
+  skiff.dragging = true; skiff.tx = p.x; skiff.ty = p.y;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if(mode !== 'playing' || !skiff.dragging) return;
+  const p = ptr(e); skiff.tx = p.x; skiff.ty = p.y;
+});
+['pointerup','pointercancel'].forEach(ev =>
+  canvas.addEventListener(ev, ()=>{ skiff.dragging = false; }));
+
+/* ---------- flow ---------- */
+const menuEl=document.getElementById('menu'), overEl=document.getElementById('over'),
+      hudEl=document.getElementById('hud');
+const scoreEl=document.getElementById('score'), multEl=document.getElementById('mult'),
+      hullRow=document.getElementById('hullRow');
+
+function paintHull(){
+  hullRow.innerHTML = '';
+  for(let i=0;i<3;i++){
+    const d = document.createElement('div');
+    d.className = 'pip' + (i < hull ? ' on' : '');
+    hullRow.appendChild(d);
+  }
+}
+function startGame(){
+  score=0; mult=1; hull=3; invuln=0; sinceHit=0; elapsed=0;
+  skiff = newSkiff(); currents=[]; fractures=[]; motes=[]; marks=[]; parts=[];
+  spawnT=0; moteT=.4; markT=6;
+  spawnCurrent(); spawnCurrent();
+  makeStars();
+  mode='playing';
+  menuEl.classList.add('hidden'); overEl.classList.add('hidden');
+  hudEl.style.display='flex'; paintHull();
+  elder('"The currents are kind today. Try not to scratch the marble."');
+  sfx.start();
+  let g = parseInt(localStorage.getItem(GAMES_KEY)||'0',10)||0;
+  localStorage.setItem(GAMES_KEY, String(g+1));
+}
+function endGame(){
+  mode='over'; sfx.over();
+  const isBest = score > best;
+  if(isBest){ best = Math.floor(score); localStorage.setItem(BEST_KEY, String(best)); }
+  document.getElementById('finalScore').textContent = Math.floor(score).toLocaleString();
+  document.getElementById('overBest').textContent = best.toLocaleString();
+  document.getElementById('newBest').textContent = isBest ? '· new best voyage ·' : '';
+  document.getElementById('menuBest').textContent = best.toLocaleString();
+  const lines = [
+    '"The Veil reclaims its own. Again?"',
+    '"Pip is already regrowing the hull. Patience."',
+    '"A fine voyage. The markings approve."'
+  ];
+  document.getElementById('overLore').innerHTML =
+    'Elder: ' + lines[Math.random()*lines.length|0];
+  hudEl.style.display='none';
+  overEl.classList.remove('hidden');
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+document.getElementById('menuBest').textContent = best.toLocaleString();
+
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && mode==='playing') endGame();
+});
+
+/* ---------- update ---------- */
+function inCurrent(x, y){
+  for(const c of currents){
+    if(Math.abs(x - currentCenter(c, y)) < c.w/2) return true;
+  }
+  return false;
+}
+function update(dt){
+  elapsed += dt; sinceHit += dt;
+  if(invuln > 0) invuln -= dt;
+
+  /* hull regrow: grown, not built */
+  if(hull < 3 && sinceHit >= 8){
+    hull++; sinceHit = 0; paintHull();
+    burst(skiff.x, skiff.y, '#e8c66a', 14);
+    elder('"Grown, not built. Give it a moment."');
+    sfx.regrow();
+  }
+
+  /* steering */
+  const SPD = 340;
+  if(skiff.dragging){
+    skiff.vx = (skiff.tx - skiff.x) * 10;
+    skiff.vy = (skiff.ty - skiff.y) * 10;
+  } else {
+    skiff.vx = 0; skiff.vy = 0;
+    if(keys['arrowleft']||keys['a']) skiff.vx = -SPD;
+    if(keys['arrowright']||keys['d']) skiff.vx = SPD;
+    if(keys['arrowup']||keys['w']) skiff.vy = -SPD*0.7;
+    if(keys['arrowdown']||keys['s']) skiff.vy = SPD*0.7;
+  }
+  skiff.x = Math.max(18, Math.min(W-18, skiff.x + skiff.vx*dt));
+  skiff.y = Math.max(H*0.25, Math.min(H-40, skiff.y + skiff.vy*dt));
+
+  /* flow multiplier */
+  if(inCurrent(skiff.x, skiff.y)) mult = Math.min(3, mult + dt*0.8);
+  else mult = Math.max(1, mult - dt*1.2);
+  score += dt * 12 * mult;
+
+  /* currents drift */
+  for(const c of currents){ c.phase += dt*0.5; }
+
+  /* spawns */
+  spawnT -= dt;
+  if(spawnT <= 0){
+    spawnFracture();
+    spawnT = Math.max(0.45, 1.5 - elapsed*0.012);
+    if(Math.random() < 0.25) spawnCurrent();
+  }
+  moteT -= dt;
+  if(moteT <= 0){ spawnMote(); moteT = 0.5 + Math.random()*0.7; }
+  markT -= dt;
+  if(markT <= 0){ spawnMark(); markT = 7 + Math.random()*6; }
+
+  const scroll = 60 + elapsed*1.2;
+
+  /* fractures */
+  for(let i=fractures.length-1; i>=0; i--){
+    const f = fractures[i];
+    f.y += (f.vy + scroll*0.4) * dt;
+    f.wob += dt*2; f.rot += f.vr*dt;
+    f.x += Math.sin(f.wob) * 24 * dt;
+    if(f.y > H + 60){ fractures.splice(i,1); continue; }
+    const dx = skiff.x - f.x, dy = skiff.y - f.y;
+    if(invuln <= 0 && Math.hypot(dx,dy) < f.r*0.8 + skiff.r){
+      hull--; sinceHit = 0; invuln = 1.1; paintHull();
+      burst(skiff.x, skiff.y, '#ff5470', 16);
+      elder('"Mind the fractures, little one."');
+      sfx.hit();
+      fractures.splice(i,1);
+      if(hull <= 0){ endGame(); return; }
+    }
+  }
+  /* motes */
+  for(let i=motes.length-1; i>=0; i--){
+    const m = motes[i];
+    m.y += (m.vy + scroll*0.5) * dt; m.ph += dt*5;
+    if(m.y > H + 20){ motes.splice(i,1); continue; }
+    if(Math.hypot(skiff.x-m.x, skiff.y-m.y) < skiff.r + 8){
+      score += 10 * mult;
+      burst(m.x, m.y, '#e8c66a', 6);
+      sfx.mote(); motes.splice(i,1);
+    }
+  }
+  /* markings: star map or grocery list, the Veil never says */
+  for(let i=marks.length-1; i>=0; i--){
+    const m = marks[i];
+    m.y += (m.vy + scroll*0.5) * dt; m.ph += dt*2;
+    if(m.y > H + 24){ marks.splice(i,1); continue; }
+    if(Math.hypot(skiff.x-m.x, skiff.y-m.y) < skiff.r + 12){
+      score += 50 * mult;
+      burst(m.x, m.y, '#00f0ff', 10);
+      elder('"Charted. Or groceries. The Veil never says."');
+      sfx.mark(); marks.splice(i,1);
+    }
+  }
+  /* particles */
+  for(let i=parts.length-1; i>=0; i--){
+    const p = parts[i];
+    p.t += dt;
+    if(p.t >= p.life){ parts.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= .96; p.vy *= .96;
+  }
+  /* stars */
+  for(const s of stars){
+    s.y += scroll*0.35*dt*(0.4 + s.s*0.4);
+    s.tw += dt*3;
+    if(s.y > H){ s.y = -4; s.x = Math.random()*W; }
+  }
+
+  scoreEl.textContent = Math.floor(score).toLocaleString();
+  multEl.textContent = '×' + mult.toFixed(1);
+}
+
+/* ---------- draw ---------- */
+function drawSkiff(){
+  const s = skiff;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  const tilt = Math.max(-0.35, Math.min(0.35, s.vx/900));
+  ctx.rotate(tilt);
+  if(invuln > 0 && Math.floor(invuln*12)%2===0) ctx.globalAlpha = 0.35;
+  /* glow */
+  const g = ctx.createRadialGradient(0,0,4,0,0,34);
+  g.addColorStop(0,'rgba(232,198,106,.35)'); g.addColorStop(1,'rgba(232,198,106,0)');
+  ctx.fillStyle = g; ctx.fillRect(-34,-34,68,68);
+  /* hull: marble dart */
+  ctx.beginPath();
+  ctx.moveTo(0,-18); ctx.quadraticCurveTo(10,-6,12,8);
+  ctx.quadraticCurveTo(6,14,0,11); ctx.quadraticCurveTo(-6,14,-12,8);
+  ctx.quadraticCurveTo(-10,-6,0,-18);
+  ctx.closePath();
+  const bg = ctx.createLinearGradient(0,-18,0,14);
+  bg.addColorStop(0,'#fbf7ec'); bg.addColorStop(.6,'#d9d2c0'); bg.addColorStop(1,'#9a937f');
+  ctx.fillStyle = bg; ctx.fill();
+  /* gold seams */
+  ctx.strokeStyle = '#e8c66a'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(0,11); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-7,-2); ctx.quadraticCurveTo(0,2,7,-2); ctx.stroke();
+  /* engine glow */
+  ctx.fillStyle = '#00f0ff';
+  ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(0,13,3.4,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+function draw(){
+  ctx.fillStyle = '#04070d';
+  ctx.fillRect(0,0,W,H);
+  /* nebula wash */
+  const neb = ctx.createRadialGradient(W*0.7,H*0.2,10,W*0.7,H*0.2,W*0.7);
+  neb.addColorStop(0,'rgba(232,198,106,.07)'); neb.addColorStop(1,'rgba(232,198,106,0)');
+  ctx.fillStyle = neb; ctx.fillRect(0,0,W,H);
+  const neb2 = ctx.createRadialGradient(W*0.2,H*0.75,10,W*0.2,H*0.75,W*0.6);
+  neb2.addColorStop(0,'rgba(139,92,246,.08)'); neb2.addColorStop(1,'rgba(139,92,246,0)');
+  ctx.fillStyle = neb2; ctx.fillRect(0,0,W,H);
+  /* stars */
+  for(const s of stars){
+    ctx.globalAlpha = 0.35 + 0.35*Math.sin(s.tw);
+    ctx.fillStyle = '#e9e4d4';
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+  /* currents */
+  for(const c of currents){
+    const grad = ctx.createLinearGradient(0,0,1,0);
+    for(let y=0; y<=H; y+=48){
+      const cx = currentCenter(c, y);
+      const gg = ctx.createLinearGradient(cx-c.w/2,0,cx+c.w/2,0);
+      gg.addColorStop(0,'rgba(232,198,106,0)');
+      gg.addColorStop(.5,'rgba(232,198,106,.16)');
+      gg.addColorStop(1,'rgba(232,198,106,0)');
+      ctx.fillStyle = gg;
+      ctx.fillRect(cx-c.w/2, y, c.w, 50);
+    }
+  }
+  /* motes */
+  for(const m of motes){
+    const tw = 0.6 + 0.4*Math.sin(m.ph);
+    ctx.fillStyle = 'rgba(232,198,106,'+tw+')';
+    ctx.shadowColor = '#e8c66a'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  /* markings */
+  for(const m of marks){
+    ctx.save();
+    ctx.translate(m.x, m.y); ctx.rotate(Math.sin(m.ph)*0.2);
+    ctx.font = '22px Georgia'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = '#e8c66a'; ctx.shadowColor='#e8c66a'; ctx.shadowBlur=14;
+    ctx.fillText(m.g, 0, 0);
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+  /* fractures */
+  for(const f of fractures){
+    ctx.save();
+    ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.beginPath();
+    f.pts.forEach((p,i)=>{ i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(8,4,14,.92)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(139,92,246,.55)'; ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+  /* particles */
+  for(const p of parts){
+    ctx.globalAlpha = 1 - p.t/p.life;
+    ctx.fillStyle = p.c;
+    ctx.fillRect(p.x-p.s/2, p.y-p.s/2, p.s, p.s);
+  }
+  ctx.globalAlpha = 1;
+  if(mode === 'playing') drawSkiff();
+}
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function frame(now){
+  let dt = (now - last) / 1000;
+  last = now;
+  dt = Math.min(dt, 0.05); /* delta-time clamp */
+  if(mode === 'playing') update(dt);
+  else if(mode === 'menu' && stars.length===0) makeStars();
+  if(mode !== 'playing'){
+    for(const s of stars){ s.y += 18*dt; s.tw += dt*3; if(s.y > H){ s.y=-4; s.x=Math.random()*W; } }
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+makeStars();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
