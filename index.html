@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script>
+/* ?view=desktop preview: force desktop theme on narrow screens */
+try {
+  if (new URLSearchParams(location.search).get("view") === "desktop") {
+    document.querySelector('meta[name="viewport"]').setAttribute("content", "width=1280");
+  }
+} catch (e) {}
+</script>
 <meta name="theme-color" content="#04070d">
 <title>Veil Skiff, a White Veil galaxy game</title>
 <style>
@@ -57,6 +65,27 @@
   #finalScore{font-size:52px;color:var(--gold);margin:8px 0 2px;letter-spacing:.04em}
   .newbest{color:var(--cyan);letter-spacing:.2em;text-transform:uppercase;font-size:13px;
     margin-top:10px;min-height:18px}
+  /* --- Desktop (Tier 5 desktop-readiness): everything in this block only
+     applies at 1024px and up. Phone CSS above is untouched. Arcade pattern:
+     centered, larger play area; the game reads #wrap size on resize, so the
+     play field grows with it. HUD scaled sensibly. */
+  @media (min-width:1024px){
+    #wrap{max-width:880px;max-height:min(100%,860px);border:1px solid #1c2530;
+      border-radius:16px;overflow:hidden}
+    .hud{padding:20px 28px}
+    .hud .stat{font-size:15px}
+    .hud .val{font-size:34px}
+    h1{font-size:60px}
+    .lore{font-size:18px;max-width:420px}
+    .btn{font-size:20px;padding:17px 46px}
+    #elder{bottom:150px}
+    #elder span{font-size:17px}
+    #finalScore{font-size:68px}
+  }
+  @media (min-width:1440px){
+    #wrap{max-width:1100px;max-height:min(100%,900px)}
+    .hud .val{font-size:38px}
+  }
 </style>
 </head>
 <body>
