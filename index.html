@@ -144,7 +144,7 @@ paintSnd();
 sndBtn.addEventListener('click', e => {
   e.stopPropagation();
   soundOn = !soundOn;
-  localStorage.setItem('vs-sound', soundOn ? 'on' : 'off');
+  safeSet('vs-sound', soundOn ? 'on' : 'off');
   paintSnd();
 });
 let AC = null;
@@ -171,7 +171,9 @@ const sfx = {
 
 /* ---------- state ---------- */
 const BEST_KEY='vs-best', GAMES_KEY='vs-games';
-let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+function safeGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+let best = parseInt(safeGet(BEST_KEY) || '0', 10) || 0;
 let mode = 'menu'; // menu | playing | over
 let score=0, mult=1, hull=3, invuln=0, sinceHit=0, elapsed=0;
 let skiff, currents=[], fractures=[], motes=[], marks=[], parts=[], stars=[];
@@ -277,12 +279,12 @@ function startGame(){
   elder('"The currents are kind today. Try not to scratch the marble."');
   sfx.start();
   let g = parseInt(localStorage.getItem(GAMES_KEY)||'0',10)||0;
-  localStorage.setItem(GAMES_KEY, String(g+1));
+  safeSet(GAMES_KEY, String(g+1));
 }
 function endGame(){
   mode='over'; sfx.over();
   const isBest = score > best;
-  if(isBest){ best = Math.floor(score); localStorage.setItem(BEST_KEY, String(best)); }
+  if(isBest){ best = Math.floor(score); safeSet(BEST_KEY, String(best)); }
   document.getElementById('finalScore').textContent = Math.floor(score).toLocaleString();
   document.getElementById('overBest').textContent = best.toLocaleString();
   document.getElementById('newBest').textContent = isBest ? '· new best voyage ·' : '';
