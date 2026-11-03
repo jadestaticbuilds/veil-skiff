@@ -87,6 +87,7 @@ try {
     .hud .val{font-size:38px}
   }
 </style>
+  <script data-goatcounter="https://georgestriderbuilds.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </head>
 <body>
 <div id="wrap">
@@ -298,6 +299,7 @@ function endGame(){
     'Elder: ' + lines[Math.random()*lines.length|0];
   hudEl.style.display='none';
   overEl.classList.remove('hidden');
+  jsbFunRate('veil-skiff', overEl.querySelector('.panel') || overEl);
 }
 document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('againBtn').addEventListener('click', startGame);
@@ -540,6 +542,45 @@ function frame(now){
 }
 makeStars();
 requestAnimationFrame(frame);
+</script>
+<script>
+/* fun-rating: 3 stars on game over, 3rd+ game over, once per session */
+function jsbFunRate(slug, mountEl){
+  if(!mountEl || mountEl.querySelector('.jsb-funrate')) return;
+  var K = 'jsb-fun-' + slug;
+  function ls(k, v){ try{ if(arguments.length===1) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){ return null; } }
+  function ss(k, v){ try{ if(arguments.length===1) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); }catch(e){ return null; } }
+  var n = parseInt(ls(K+'-n')||'0', 10) + 1;
+  ls(K+'-n', String(n));
+  if(n < 3 || ss(K+'-s')) return;
+  ss(K+'-s', '1');
+  var box = document.createElement('div');
+  box.className = 'jsb-funrate';
+  box.innerHTML = '<div class="jsb-fr-q">fun?</div><div class="jsb-fr-stars">' +
+    '<button type="button" data-s="1" aria-label="not fun">★</button>' +
+    '<button type="button" data-s="2" aria-label="ok">★</button>' +
+    '<button type="button" data-s="3" aria-label="love it">★</button></div>';
+  if(!document.getElementById('jsb-fr-css')){
+    var css = document.createElement('style'); css.id = 'jsb-fr-css';
+    css.textContent = '.jsb-funrate{margin:14px auto 4px;text-align:center;}' +
+      '.jsb-fr-q{font-size:12px;letter-spacing:.18em;opacity:.55;margin-bottom:6px;text-transform:uppercase;}' +
+      '.jsb-fr-stars{display:flex;gap:10px;justify-content:center;}' +
+      '.jsb-fr-stars button{background:none;border:none;font-size:34px;line-height:1;' +
+      'color:rgba(255,255,255,.22);cursor:pointer;min-width:52px;min-height:52px;padding:4px;}' +
+      '.jsb-fr-thanks{font-size:13px;letter-spacing:.1em;opacity:.7;}';
+    document.head.appendChild(css);
+  }
+  mountEl.appendChild(box);
+  box.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button[data-s]') : null;
+    if(!b) return;
+    try{ if(window.goatcounter && window.goatcounter.count){
+      window.goatcounter.count({ path: '/event/fun/' + slug + '/' + b.getAttribute('data-s'), event: true });
+    }}catch(e2){}
+    box.innerHTML = '<div class="jsb-fr-thanks">thanks</div>';
+    setTimeout(function(){ if(box.parentNode) box.parentNode.removeChild(box); }, 1400);
+  });
+}
 </script>
 </body>
 </html>
