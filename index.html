@@ -137,105 +137,153 @@ function resize(){
 }
 window.addEventListener('resize', resize); resize();
 
-/* ---------- drum & bass engine ----------
-   Procedural 174 BPM DnB. Intensity follows elapsed game time:
-   sparse sub+bass -> kick/hats -> snare -> reese -> fills -> full tilt. */
+/* ---------- liquid drum & bass engine ----------
+   174 BPM, soft drums, warm Rhodes chords, rolling sub.
+   Intensity follows elapsed game time. Mote pickups quantize
+   to the 8th-note grid so they land on the beat. */
 const DNB = {
-  bpm: 174, steps: 32, step: 0, nextT: 0, timer: null, playing: false,
-  // 4-bar progression (roots as MIDI): Dm Bb F C
+  bpm: 174, steps: 32, step: 0, nextT: 0, startT: 0,
+  timer: null, playing: false, moteIdx: 0,
+  // 4-bar progression: Dm9 Bbmaj9 Fmaj9 C9
   roots: [38, 34, 41, 36], // D2 Bb1 F2 C2
+  chordTones: [[0,3,7,10,14],[0,4,7,11,14],[0,4,7,11,14],[0,4,7,10,14]],
   noiseBuf: null,
   init(){
     if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; } }
     if(AC.state === 'suspended') AC.resume();
-    // shared noise buffer for snare/hats
     const len = AC.sampleRate * 1;
     this.noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
-    // music bus -> gentle lowpass that opens with intensity -> destination
-    this.bus = AC.createGain(); this.bus.gain.value = 0.32;
+    this.bus = AC.createGain(); this.bus.gain.value = 0.3;
     this.mFilter = AC.createBiquadFilter(); this.mFilter.type='lowpass';
-    this.mFilter.frequency.value = 900; this.mFilter.Q.value = 0.8;
+    this.mFilter.frequency.value = 1200; this.mFilter.Q.value = 0.6;
     this.bus.connect(this.mFilter); this.mFilter.connect(AC.destination);
   },
   midiHz(m){ return 440*Math.pow(2,(m-69)/12); },
-  kick(t){
+  kick(t){ // soft, round — no click
     const o=AC.createOscillator(), g=AC.createGain();
     o.type='sine';
-    o.frequency.setValueAtTime(150,t);
-    o.frequency.exponentialRampToValueAtTime(38,t+0.11);
-    g.gain.setValueAtTime(0.9,t);
-    g.gain.exponentialRampToValueAtTime(0.001,t+0.24);
+    o.frequency.setValueAtTime(110,t);
+    o.frequency.exponentialRampToValueAtTime(42,t+0.12);
+    g.gain.setValueAtTime(0.5,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
     o.connect(g); g.connect(this.bus);
-    o.start(t); o.stop(t+0.26);
+    o.start(t); o.stop(t+0.32);
   },
-  snare(t, ghost){
+  snare(t, ghost){ // brush-soft
     const n=AC.createBufferSource(); n.buffer=this.noiseBuf;
-    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=1400;
+    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=1000;
     const g=AC.createGain();
-    const v = ghost?0.22:0.5, dur = ghost?0.09:0.18;
-    g.gain.setValueAtTime(v,t);
+    const v = ghost?0.1:0.26, dur = ghost?0.1:0.22;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(v,t+0.008);
     g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     n.connect(f); f.connect(g); g.connect(this.bus);
     n.start(t); n.stop(t+dur+0.02);
-    if(!ghost){ // body
+    if(!ghost){
       const o=AC.createOscillator(), g2=AC.createGain();
-      o.type='triangle'; o.frequency.value=190;
-      g2.gain.setValueAtTime(0.3,t);
-      g2.gain.exponentialRampToValueAtTime(0.001,t+0.1);
+      o.type='triangle'; o.frequency.value=180;
+      g2.gain.setValueAtTime(0.16,t);
+      g2.gain.exponentialRampToValueAtTime(0.001,t+0.12);
       o.connect(g2); g2.connect(this.bus);
-      o.start(t); o.stop(t+0.12);
+      o.start(t); o.stop(t+0.14);
     }
   },
   hat(t, open){
     const n=AC.createBufferSource(); n.buffer=this.noiseBuf;
-    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=7500;
+    const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=7800;
     const g=AC.createGain();
-    const dur = open?0.28:0.04;
-    g.gain.setValueAtTime(open?0.16:0.11,t);
+    const dur = open?0.3:0.05;
+    g.gain.setValueAtTime(open?0.09:0.06,t);
     g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     n.connect(f); f.connect(g); g.connect(this.bus);
     n.start(t); n.stop(t+dur+0.02);
   },
-  sub(t, midi, len){
+  shaker(t){
+    const n=AC.createBufferSource(); n.buffer=this.noiseBuf;
+    const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=6000; f.Q.value=1.2;
+    const g=AC.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(0.05,t+0.03);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.14);
+    n.connect(f); f.connect(g); g.connect(this.bus);
+    n.start(t); n.stop(t+0.16);
+  },
+  sub(t, midi, len){ // smooth rolling sub
     const o=AC.createOscillator(), g=AC.createGain();
     o.type='sine'; o.frequency.value=this.midiHz(midi);
     g.gain.setValueAtTime(0.0001,t);
-    g.gain.linearRampToValueAtTime(0.55,t+0.015);
-    g.gain.setValueAtTime(0.55,t+len*0.7);
+    g.gain.linearRampToValueAtTime(0.5,t+0.04);
+    g.gain.setValueAtTime(0.5,t+Math.max(0.04,len*0.75));
     g.gain.exponentialRampToValueAtTime(0.001,t+len);
     o.connect(g); g.connect(this.bus);
     o.start(t); o.stop(t+len+0.05);
   },
-  reese(t, midi, len){
-    [-8,8].forEach(cents=>{
-      const o=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain();
-      o.type='sawtooth'; o.frequency.value=this.midiHz(midi+12); o.detune.value=cents;
-      f.type='lowpass'; f.frequency.value=700; f.Q.value=2;
+  rhodes(t, midiNotes, len){ // warm electric-piano chords
+    midiNotes.forEach(m=>{
+      const o1=AC.createOscillator(), o2=AC.createOscillator();
+      const g=AC.createGain(), lfo=AC.createOscillator(), lg=AC.createGain();
+      o1.type='sine'; o1.frequency.value=this.midiHz(m);
+      o2.type='triangle'; o2.frequency.value=this.midiHz(m)*2;
+      const g2=AC.createGain(); g2.gain.value=0.25; // soft octave shimmer
+      lfo.type='sine'; lfo.frequency.value=4.2;
+      lg.gain.value=0.18; lfo.connect(lg); lg.connect(g.gain);
       g.gain.setValueAtTime(0.0001,t);
-      g.gain.linearRampToValueAtTime(0.16,t+0.03);
+      g.gain.linearRampToValueAtTime(0.075,t+0.03);
+      g.gain.setValueAtTime(0.075,t+len*0.6);
       g.gain.exponentialRampToValueAtTime(0.001,t+len);
-      o.connect(f); f.connect(g); g.connect(this.bus);
-      o.start(t); o.stop(t+len+0.05);
+      o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(this.bus);
+      o1.start(t); o2.start(t); lfo.start(t);
+      o1.stop(t+len+0.1); o2.stop(t+len+0.1); lfo.stop(t+len+0.1);
     });
   },
-  stab(t, midiNotes){
+  padWash(t, midiNotes, len){ // background wash at high intensity
     midiNotes.forEach(m=>{
-      const o=AC.createOscillator(), f=AC.createBiquadFilter(), g=AC.createGain();
-      o.type='sawtooth'; o.frequency.value=this.midiHz(m);
-      f.type='lowpass'; f.frequency.setValueAtTime(2400,t);
-      f.frequency.exponentialRampToValueAtTime(500,t+0.3);
-      g.gain.setValueAtTime(0.0001,t);
-      g.gain.linearRampToValueAtTime(0.09,t+0.02);
-      g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
-      o.connect(f); f.connect(g); g.connect(this.bus);
-      o.start(t); o.stop(t+0.4);
+      [-5,5].forEach(cents=>{
+        const o=AC.createOscillator(), g=AC.createGain();
+        o.type='triangle'; o.frequency.value=this.midiHz(m); o.detune.value=cents;
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.linearRampToValueAtTime(0.035,t+len*0.3);
+        g.gain.linearRampToValueAtTime(0.0001,t+len);
+        o.connect(g); g.connect(this.bus);
+        o.start(t); o.stop(t+len+0.1);
+      });
     });
+  },
+  pluck(t, midi){ // quantized mote ding — soft, in key
+    const o1=AC.createOscillator(), o2=AC.createOscillator(), g=AC.createGain();
+    o1.type='triangle'; o1.frequency.value=this.midiHz(midi);
+    o2.type='sine'; o2.frequency.value=this.midiHz(midi)*2;
+    const g2=AC.createGain(); g2.gain.value=0.3;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(0.22,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+    o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(this.bus);
+    o1.start(t); o2.start(t);
+    o1.stop(t+0.6); o2.stop(t+0.6);
+  },
+  mote(){ // pickup -> next 8th-note gridline, pentatonic walk in D minor
+    if(!soundOn) return;
+    if(!this.playing || !AC){
+      try{
+        AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+        if(!this.bus) return;
+        this.pluck(AC.currentTime+0.02, 74);
+      }catch(e){}
+      return;
+    }
+    const spb = 60/this.bpm/4, eighth = spb*2;
+    const now = AC.currentTime;
+    const n = Math.ceil((now - this.startT)/eighth + 0.001);
+    const t = Math.max(this.startT + n*eighth, now + 0.03);
+    const penta = [74,77,79,81,84,81,79,77]; // D F G A C, walks up and back
+    this.pluck(t, penta[this.moteIdx % penta.length]);
+    this.moteIdx++;
   },
   schedule(){
     if(!this.playing) return;
-    const spb = 60/this.bpm/4; // 16th
+    const spb = 60/this.bpm/4;
     while(this.nextT < AC.currentTime + 0.14){
       this.playStep(this.step, this.nextT, spb);
       this.nextT += spb;
@@ -243,39 +291,33 @@ const DNB = {
     }
   },
   playStep(s, t, spb){
-    const inten = Math.min(1, elapsed/100); // full tilt ~100s in
-    this.mFilter.frequency.setTargetAtTime(900 + inten*5200, t, 0.1);
-    const bar = Math.floor(s/16); // 0 or 1
-    // 4-bar cycle: Dm Bb F C — advances one chord per 32-step loop
+    const inten = Math.min(1, elapsed/100);
+    this.mFilter.frequency.setTargetAtTime(1200 + inten*4800, t, 0.15);
     const progIdx = Math.floor(elapsed / (spb*32)) % 4;
     const root = this.roots[progIdx];
+    const tones = this.chordTones[progIdx].map(iv=>root+12+iv); // chord up an octave
     const inBar = s % 16;
-    // --- sub bass: rides the groove, always on ---
-    if(s%16===0) this.sub(t, root-12, spb*14);       // root, long
-    if(inten>0.25 && s%16===7) this.sub(t, root-12+7, spb*3); // fifth pickup
-    if(inten>0.6 && s%16===11) this.sub(t, root-12+10, spb*2);
-    // --- kick ---
-    const kickPat = inten>0.45 ? [0,7,10] : (inten>0.12 ? [0,10] : [0]);
-    if(kickPat.includes(inBar)) this.kick(t);
-    // --- snare: DnB backbeat ---
-    if(inten>0.28 && (inBar===8)) this.snare(t,false);
-    if(inten>0.62 && inBar===14) this.snare(t,true);   // ghost
-    if(inten>0.8 && inBar===12) this.snare(t,true);    // extra ghost
-    // --- hats ---
-    if(inten>0.12 && s%2===0) this.hat(t,false);
-    if(inten>0.5 && s%2===1) this.hat(t,false);
-    if(inten>0.72 && inBar===14) this.hat(t,true);
-    // --- reese mid-bass ---
-    if(inten>0.5){
-      if(inBar===0) this.reese(t, root, spb*6);
-      if(inBar===7) this.reese(t, root+7, spb*3);
-      if(inten>0.75 && inBar===10) this.reese(t, root+10, spb*4);
-    }
-    // --- atmospheric stabs at full tilt ---
-    if(inten>0.85 && (s===4 || s===20)){
-      const chordTones = [root+24, root+27, root+31]; // min triad up high
-      this.stab(t, chordTones);
-    }
+    // --- Rhodes: the heart of liquid, one chord per 2-bar loop ---
+    if(s===0) this.rhodes(t, tones, spb*30);
+    if(inten>0.65 && s===16) this.rhodes(t, tones.slice(1), spb*12); // rhythmic answer
+    // --- rolling sub ---
+    if(s%16===0) this.sub(t, root-12, spb*10);
+    if(inten>0.2 && s%16===7) this.sub(t, root-12+7, spb*4);
+    if(inten>0.45 && s%16===11) this.sub(t, root-12+5, spb*3);
+    if(inten>0.7 && s%16===14) this.sub(t, root-12+10, spb*2);
+    // --- soft kick ---
+    if(inten>0.08 && inBar===0) this.kick(t);
+    if(inten>0.45 && inBar===10) this.kick(t);
+    // --- brush snare ---
+    if(inten>0.25 && inBar===8) this.snare(t,false);
+    if(inten>0.6 && inBar===14) this.snare(t,true);
+    // --- hats & shaker ---
+    if(inten>0.08 && s%2===0) this.hat(t,false);
+    if(inten>0.45 && s%2===1) this.hat(t,false);
+    if(inten>0.7 && inBar===14) this.hat(t,true);
+    if(inten>0.3 && s%2===1) this.shaker(t);
+    // --- pad wash at full tilt ---
+    if(inten>0.85 && s===0) this.padWash(t, tones, spb*32);
   },
   start(){
     if(this.playing) return;
@@ -283,7 +325,9 @@ const DNB = {
     if(!AC) return;
     this.playing = true;
     this.step = 0;
-    this.nextT = AC.currentTime + 0.08;
+    this.moteIdx = 0;
+    this.startT = AC.currentTime + 0.08;
+    this.nextT = this.startT;
     this.timer = setInterval(()=>this.schedule(), 25);
   },
   stop(){
@@ -320,7 +364,7 @@ function beep(freq, dur, type, vol){
   }catch(e){}
 }
 const sfx = {
-  mote(){ beep(880 + Math.random()*220, .12, 'sine', .08); },
+  mote(){ DNB.mote(); }, // quantized to the beat grid inside DNB
   mark(){ beep(660,.1,'triangle',.1); setTimeout(()=>beep(990,.14,'triangle',.1), 90); },
   hit(){ beep(140,.25,'sawtooth',.14); },
   regrow(){ beep(330,.2,'sine',.09); setTimeout(()=>beep(495,.25,'sine',.09), 140); },
