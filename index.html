@@ -337,7 +337,7 @@ const DNB = {
 };
 
 /* ---------- audio ---------- */
-let soundOn = (localStorage.getItem('vs-sound') !== 'off');
+let soundOn = (safeGet('vs-sound') !== 'off');
 const sndBtn = document.getElementById('sndBtn');
 function paintSnd(){ sndBtn.textContent = soundOn ? '♪' : '✕'; sndBtn.style.opacity = soundOn ? 1 : .45; }
 paintSnd();
@@ -482,7 +482,7 @@ function startGame(){
   elder('"The currents are kind today. Try not to scratch the marble."');
   sfx.start();
   if(soundOn) DNB.start();
-  let g = parseInt(localStorage.getItem(GAMES_KEY)||'0',10)||0;
+  let g = parseInt(safeGet(GAMES_KEY)||'0',10)||0;
   safeSet(GAMES_KEY, String(g+1));
 }
 function endGame(){
